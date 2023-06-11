@@ -39,11 +39,17 @@ namespace AutoFax
         {
             if (this.worker.IsBusy)
             {
+                System.Windows.Forms.MessageBox.Show($"The closing operation can be performed by pressing the OK button. However, please wait for the current fax process to finish before closing the window.", "Terminating Fax Process", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 worker.CancelAsync();
                 e.Cancel = true;
-                System.Windows.Forms.MessageBox.Show($"The closing operation is accepted. Please wait for the current fax process ends before closing the window.", "Fax Process", MessageBoxButtons.OK);
+
                 return;
             }
+        }
+
+        private void MainWindowClosed(object sender, EventArgs e)
+        {
+            System.Windows.Application.Current.Shutdown();
         }
 
         private void LoadAppSettings()
@@ -54,7 +60,7 @@ namespace AutoFax
             }
             catch (Exception e)
             {
-                var result = System.Windows.Forms.MessageBox.Show(e.Message, "Error Detected", MessageBoxButtons.OK);
+                System.Windows.Forms.MessageBox.Show(e.Message, "App Setting Loading Error", MessageBoxButtons.OK);
                 this.Close();
             }
         }
@@ -116,72 +122,89 @@ namespace AutoFax
             }
         }
 
-        private async void SendFaxButton_Click(object sender, RoutedEventArgs e)
+        private void SendFaxButton_Click(object sender, RoutedEventArgs e)
         {
+            // Disable the Send Fax Button
+            this.SendFaxButton.IsEnabled = false;
+
+            // Clear the ProcessLogTextBox
+            this.ProcessLogTextBox.Text = string.Empty;
+
+            this.ProgressBar.Value = 0;
+
+            // Check whether the Log Folder exists
             if (!Directory.Exists("./Log"))
                 Directory.CreateDirectory("./Log");
 
             var excelHandler = new ExcelHandler(this.selectedExcel);
+            var documents = new Dictionary<string, string>();
 
             // Filter out unknown and invisible temporary file
             var allowedExtension = this.appSettings["AcceptFileExtension"].Split(new char[] { ';' }).ToList();
-            var documents = Directory.EnumerateFiles(this.selectedFolder, "*.*", SearchOption.AllDirectories)
-                                .Where(fullpath => !Path.GetFileNameWithoutExtension(fullpath).StartsWith("~$") && allowedExtension.Any(fullpath.ToLower().EndsWith))
-                                .ToDictionary(fullpath => Path.GetFileNameWithoutExtension(fullpath),
-                                              fullpath => fullpath);
 
-            foreach ((var faxNum, var recipientName) in excelHandler.GetRowsInfo())
-                Console.WriteLine($"{faxNum}, {recipientName}");
+            try
+            {
+                documents = Directory.EnumerateFiles(this.selectedFolder, "*.*", SearchOption.AllDirectories)
+                                    .Where(fullpath => !Path.GetFileNameWithoutExtension(fullpath).StartsWith("~$") && allowedExtension.Any(fullpath.ToLower().EndsWith))
+                                    .Distinct()
+                                    .ToDictionary(fullpath => Path.GetFileNameWithoutExtension(fullpath),
+                                                  fullpath => fullpath);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show($"{ex.Message}", "Duplicate File Name", MessageBoxButtons.OK);
+
+                return;
+            }
+            
+            var faxSender = new CustomFaxSender();
 
             worker.DoWork += (workerSender, workerEvent) =>
             {
-                for (int i = 0; i < 100; i++)
+                var excelInfo = excelHandler.GetRowsInfo();
+
+                foreach ((var faxNum, var recipientName) in excelInfo)
                 {
                     if (worker.CancellationPending == true)
                     {
                         workerEvent.Cancel = true;
-                        System.Windows.Forms.MessageBox.Show($"The fax process has ended. You can now close the window :).", "Fax Process", MessageBoxButtons.OK);
                         break;
                     }
-                    System.Threading.Thread.Sleep(1000);
-                    worker.ReportProgress(i + 1);
+
+                    if (documents.TryGetValue(recipientName, out var docPath))
+                    {
+                        var recipientInfo = new Dictionary<string, string> { { faxNum, recipientName } };
+                        faxSender.SendFax(recipientInfo, documents[recipientName]);
+                    }
+
+                    worker.ReportProgress((int)(1M / excelInfo.Count() * 100));
                 }
             };
 
             worker.ProgressChanged += (workerSender, workerEvent) =>
             {
-                ProgressBar.Value += 1;
-
-                Console.WriteLine("Updated");
+                ProgressBar.Value = workerEvent.ProgressPercentage;
             };
 
             worker.RunWorkerCompleted += (workerSender, workerEvent) =>
             {
+                faxSender.DisconnectFaxServer();
+
+                ProgressBar.Value = 100;
+
+                System.Windows.Forms.MessageBox.Show($"The current fax process has completed. You may now close the window. :)", "Fax Process", MessageBoxButtons.OK);
+
+                // Write the log file
+                using (StreamWriter writer = new StreamWriter($"./Log/FaxLog_{DateTime.Now.ToString("yyyyMMddHHmmss")}.txt"))
+                {
+                    writer.WriteLine(this.ProcessLogTextBox.Text);
+                }
+
+                // Enable the Send Fax Button once the worker is terminated or completed
+                //this.SendFaxButton.IsEnabled = true;
             };
 
             worker.RunWorkerAsync();
-
-
-            //var faxSender = new CustomFaxSender();
-
-            //foreach ((string faxNumber, string recipientName) in excelHandler.GetRowsInfo())
-            //{
-            //    if (documents.TryGetValue(recipientName, out var docPath))
-            //    {
-            //        var recipientInfo = new Dictionary<string, string> { { faxNumber, string.Empty } };
-            //        faxSender.SendFax(recipientInfo, documents[recipientName]);
-            //    }
-            //}
-
-            //faxSender.DisconnectFaxServer();
-
-            // Write the log file
-            //using (StreamWriter writer = new StreamWriter($"./Log/FaxLog_{DateTime.Now.ToString("yyyyMMddHHmmss")}.txt"))
-            //{
-            //    writer.WriteLine(this.ProcessLogTextBox.Text);
-            //}
-
-
         }
     }
 
@@ -195,17 +218,29 @@ namespace AutoFax
 
         public override void Write(char value)
         {
-            textbox.Text += value;
+            //textbox.Text += value;
+
+            base.Write(value);
+            textbox.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                textbox.AppendText(value.ToString());
+            }));
         }
 
         public override void Write(string value)
         {
-            textbox.Text += value;
+            //textbox.Text += value;
+
+            base.Write(value);
+            textbox.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                textbox.AppendText(value.ToString());
+            }));
         }
 
         public override Encoding Encoding
         {
-            get { return Encoding.ASCII; }
+            get { return Encoding.UTF8; }
         }
     }
 }

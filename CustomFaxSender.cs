@@ -111,6 +111,7 @@ namespace AutoFax
 
         /// <summary>
         /// Send the set up FaxDocument to the specific recipients
+        /// The body parameter is expected to be the path of attactment
         /// </summary>
         protected internal virtual void SendFax(Dictionary<string, string> recipientInfos, string body, string subject = null, string docName = null)
         {
@@ -119,6 +120,8 @@ namespace AutoFax
                 var faxDoc = this.FaxDocSetup(recipientInfos, body, subject, docName);
                 var faxRtnValue = faxDoc.Submit(faxServer.ServerName);
                 faxDoc = null;
+
+                Console.WriteLine($"Document {Path.GetFileName(body)} has been submitted.");
             }
             catch (Exception e)
             {

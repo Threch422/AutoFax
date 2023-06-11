@@ -1,54 +1,47 @@
-﻿using System;
+﻿using Microsoft.Office.Interop.Excel;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Office.Core;
-using Microsoft.Office.Interop.Excel;
 
 namespace AutoFax
 {
     public class ExcelHandler
     {
-        protected Application excelApp;
-        protected Workbook excelWorkBook;
-        protected Worksheet excelWorkSheet;
-        protected Range usedRange;
-
-        protected int Rows => usedRange.Rows.Count;
-        protected int Columns => usedRange.Columns.Count;
+        protected string filePath;
 
         public ExcelHandler()
         {
-            excelApp = new Application();
-            excelApp.Visible = false;
-            excelWorkBook = null;
-            excelWorkSheet = null;
-            usedRange = null;
+            this.filePath = string.Empty;
         }
 
         public ExcelHandler(string filePath)
         {
-            excelApp = new Application();
-            excelApp.Visible = false;
-            excelWorkBook = excelApp.Workbooks.Open(filePath);
-            excelWorkSheet = excelWorkBook.Sheets[1];
-            usedRange = excelWorkSheet.UsedRange;
-        }
-
-        ~ExcelHandler()
-        {
-            excelWorkBook.Close(0);
-            excelApp.Quit();
+            this.filePath = filePath;
         }
 
         // Returning the FaxNumber and RecipientName
-        protected internal virtual IEnumerable<(string, string)> GetRowsInfo()
+        protected internal virtual List<(string, string)> GetRowsInfo()
         {
-            for (int row = 2; row <= Rows; row++)
-                yield return
-                    (usedRange.Cells[row, 1].Value2?.ToString() ?? string.Empty, 
-                     usedRange.Cells[row, 2].Value2?.ToString() ?? string.Empty);
+            Application excelApp = new Application();
+            excelApp.Visible = false;
+            Workbook excelWorkbook = excelApp.Workbooks.Open(this.filePath, ReadOnly: true);
+            Worksheet excelWorkSheet = excelWorkbook.Sheets[1];
+            Range usedRange = excelWorkSheet.UsedRange;
+
+            List<(string, string)> output = new List<(string, string)>();
+
+            for (int row = 2; row <= usedRange.Rows.Count; row++)
+            {
+                output.Add((usedRange.Cells[row, 1].Value2?.ToString() ?? string.Empty, usedRange.Cells[row, 2].Value2?.ToString() ?? string.Empty));
+            }
+
+            excelWorkbook.Close(0);
+            excelApp.Quit();
+
+            return output;
+
+            //for (int row = 2; row <= Rows; row++)
+            //    yield return
+            //        (usedRange.Cells[row, 1].Value2?.ToString() ?? string.Empty,
+            //         usedRange.Cells[row, 2].Value2?.ToString() ?? string.Empty);
         }
     }
 }
