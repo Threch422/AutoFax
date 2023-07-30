@@ -20,7 +20,7 @@
             <RowDefinition Height="26*"/>
             <RowDefinition Height="310*"/>
         </Grid.RowDefinitions>
-        <Label Content="Document Folder" HorizontalAlignment="Left" Margin="24,12,0,0" VerticalAlignment="Top" FontSize="14" Height="32" FontWeight="Normal" FontFamily="Arial" Width="115"/>
+        <Label x:Name="Label_DocDir" Content="Document Folder" HorizontalAlignment="Left" Margin="24,12,0,0" VerticalAlignment="Top" FontSize="14" Height="32" FontWeight="Normal" FontFamily="Arial" Width="115"/>
         <Button 
             x:Name="DirButton"
             Style="{StaticResource MaterialDesignPaperLightButton}" 
@@ -89,5 +89,6 @@
                 VerticalContentAlignment="Top"
                 VerticalScrollBarVisibility="Auto" Width="731" FontFamily="Arial" IsReadOnly="True" BorderBrush="#28000000" SelectionBrush="#28000000" />
         </StackPanel>
+        <CheckBox x:Name="IsGenerateWordDoc_CheckBox" Content="Generate Word Documents" HorizontalAlignment="Left" Margin="32,111,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.562,-0.731" Checked="IsGenerateWordDoc_CheckBox_Checked" Unchecked="IsGenerateWordDoc_CheckBox_UnChecked" FontFamily="Arial"/>
     </Grid>
 </Window>
